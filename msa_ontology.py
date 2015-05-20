@@ -1,5 +1,6 @@
 from rdflib.namespace import OWL, RDF, RDFS, XSD
 from rdflib import Graph, Literal, Namespace, URIRef
+from urllib import quote,unquote
 from progress.bar import Bar
 from biocma import utils,cma
 
@@ -22,7 +23,7 @@ def clean_records(block):
 
 def build_empty_ontology():
 	#new namespace definition
-	MSA = Namespace("localhost/msaont#")
+	MSA = Namespace("msaont#")
 
 	#instantiate empty graph
 	graph = Graph()
@@ -84,10 +85,12 @@ def build_empty_ontology():
 
 if __name__ == "__main__":
 	
-	MSA = Namespace("localhost/msaont#")
+	MSA = Namespace("msaont#")
 	uris,graph = build_empty_ontology() 
 	#ifile = 'totnrtxTK_with_consensus.cma'
-	ifile = 'prokino-dedupe.cma'
+	#ifile = 'prokino-dedupe.cma'
+	#ifile = 'temp.cma'
+        ifile = '/home/dim/Dropbox/msa_ontology/pdb_20150519.cma'
 
 	all_aln = cma.read(ifile)
 	dedup_aln = clean_records(all_aln)
@@ -101,7 +104,7 @@ if __name__ == "__main__":
 
 	for rec in dedup_aln['sequences'][1:]:
 		seq = ''.join((c for c in rec['seq'] if not c.islower()))
-		acc = rec['id']
+		acc = quote(rec['id'])
 		#sequence instance
 		sequri = URIRef(MSA[acc])
 		graph.add((sequri, RDF.type, MSA.sequence))
@@ -116,8 +119,8 @@ if __name__ == "__main__":
 			else:
 				graph.add((ruri, RDF.type, MSA.aligned_residue))
 				graph.add((ruri, MSA.aln_pos, Literal(i+1)))
-				if acc in dedup_eqv[i+1]:
-					graph.add((ruri, MSA.native_pos, Literal(dedup_eqv[i+1][acc])))
+				if unquote(acc) in dedup_eqv[i+1]:
+					graph.add((ruri, MSA.native_pos, Literal(dedup_eqv[i+1][unquote(acc)])))
 				else:
 					print "shouldn't happen" #deletions taken care of above
 					#graph.add((ruri, MSA.native_pos, Literal(dedup_eqv[i+1][acc])))
