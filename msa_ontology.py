@@ -23,7 +23,7 @@ def clean_records(block):
 
 def build_empty_ontology():
 	#new namespace definition
-	MSA = Namespace("msaont#")
+        MSA = Namespace("http://localhost/msaont#")
 
 	#instantiate empty graph
 	graph = Graph()
@@ -84,21 +84,25 @@ def build_empty_ontology():
 	return uris, graph
 
 if __name__ == "__main__":
-	
-	MSA = Namespace("msaont#")
-	uris,graph = build_empty_ontology() 
+        name = 'pdb_aln'
+	MSA = Namespace("http://localhost/msaont#")
+	#uris,graph = build_empty_ontology() 
+        graph = Graph()
+	graph.bind("rdf", RDF)
+	graph.bind("rdfs", RDFS)
+	graph.bind("msaont", MSA)
 	#ifile = 'totnrtxTK_with_consensus.cma'
 	#ifile = 'prokino-dedupe.cma'
-	#ifile = 'temp.cma'
-        ifile = '/home/dim/Dropbox/msa_ontology/pdb_20150519.cma'
+	ifile = 'temp.cma'
+        #ifile = '/home/dim/Dropbox/msa_ontology/pdb_20150519.cma'
 
 	all_aln = cma.read(ifile)
 	dedup_aln = clean_records(all_aln)
 	dedup_eqv = utils.get_equivalent_positions(dedup_aln)
 	#MSA instance
-	curi = URIRef(MSA[ifile])	
-	graph.add((curi, RDF.type, uris['msa']))
-	graph.add((curi, MSA.id, Literal(ifile)))
+	curi = URIRef(MSA[name])	
+	graph.add((curi, RDF.type, MSA.msa))
+	graph.add((curi, MSA.id, Literal(name)))
 
 	bar = Bar('Scanning sequences', max=len(dedup_aln['sequences']))
 
@@ -109,18 +113,18 @@ if __name__ == "__main__":
 		sequri = URIRef(MSA[acc])
 		graph.add((sequri, RDF.type, MSA.sequence))
 		graph.add((sequri, MSA.id, Literal(acc)))
-		for i,r in enumerate(seq):
+		for i,r in enumerate(seq,start=1):
 			ruri = URIRef(MSA[acc+str(i)])
 			graph.add((sequri, MSA.has_segment, ruri))
 			if r == '-':
 				#add deletion node
 				graph.add((ruri, RDF.type, MSA.deletion))
-				graph.add((ruri, MSA.deleted_aln_pos, Literal(i+1)))
+				graph.add((ruri, MSA.deleted_aln_pos, Literal(i)))
 			else:
 				graph.add((ruri, RDF.type, MSA.aligned_residue))
-				graph.add((ruri, MSA.aln_pos, Literal(i+1)))
-				if unquote(acc) in dedup_eqv[i+1]:
-					graph.add((ruri, MSA.native_pos, Literal(dedup_eqv[i+1][unquote(acc)])))
+				graph.add((ruri, MSA.aln_pos, Literal(i)))
+				if unquote(acc) in dedup_eqv[i]:
+					graph.add((ruri, MSA.native_pos, Literal(dedup_eqv[i][unquote(acc)])))
 				else:
 					print "shouldn't happen" #deletions taken care of above
 					#graph.add((ruri, MSA.native_pos, Literal(dedup_eqv[i+1][acc])))
