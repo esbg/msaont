@@ -93,8 +93,10 @@ if __name__ == "__main__":
 	graph.bind("msaont", MSA)
 	#ifile = 'totnrtxTK_with_consensus.cma'
 	#ifile = 'prokino-dedupe.cma'
-	ifile = 'temp.cma'
-        #ifile = '/home/dim/Dropbox/msa_ontology/pdb_20150519.cma'
+	#ifile = 'temp.cma'
+        #ifile = 'seqs-pressed-cons.cma'
+        ifile = '150806_nrtx.unique_is119_is10.cma'
+        outfile = 'msaont_nr.rdf'
 
 	all_aln = cma.read(ifile)
 	dedup_aln = clean_records(all_aln)
@@ -106,8 +108,14 @@ if __name__ == "__main__":
 
 	bar = Bar('Scanning sequences', max=len(dedup_aln['sequences']))
 
-	for rec in dedup_aln['sequences'][1:]:
+        #limited number of records for testing
+	for rec in dedup_aln['sequences'][1:6]:
+                print rec['id']
+                #assume sequence uri already exists
+                tsplit = rec['id'].split('_')
+                sequri = MSA['_'.join(tsplit[1:])]
 		seq = ''.join((c for c in rec['seq'] if not c.islower()))
+                og_seq = rec['seq']
 		acc = quote(rec['id'])
 		#sequence instance
 		sequri = URIRef(MSA[acc])
@@ -116,6 +124,21 @@ if __name__ == "__main__":
 		for i,r in enumerate(seq,start=1):
 			ruri = URIRef(MSA[acc+str(i)])
 			graph.add((sequri, MSA.has_segment, ruri))
+                        if og_seq[0] == r:
+                            og_seq = og_seq[1:]
+                        else:
+                            j = 0
+                            while og_seq[j] != r:
+                                j += 1
+                            insert = og_seq[:j]
+                            og_seq = og_seq[j+1:]
+                            rurii = MSA[acc+'_i_'+str(i)]
+                            graph.add((rurii, RDF.type, MSA.Insertion))
+                            graph.add((rurii, MSA.hasAlignedPosition, Literal(i)))
+                            graph.add((rurii, MSA.hasNativeResidue, Literal(insert.upper())))
+                            graph.add((rurii, MSA.hasLength, Literal(len(insert))))
+                            if rec['id'] in dedup_eqv[i]:
+                                graph.add((rurii, MSA.hasNativePosition, Literal(dedup_eqv[i][rec['id']]+1)))
 			if r == '-':
 				#add deletion node
 				graph.add((ruri, RDF.type, MSA.deletion))
@@ -155,6 +178,7 @@ if __name__ == "__main__":
 				}
 				GROUP BY ?pos ?res'''
 
+        graph.serialize(destination=outfile, format='pretty-xml')
 	qres = graph.query(quer)
 
 
