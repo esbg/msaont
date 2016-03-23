@@ -84,23 +84,23 @@ def build_empty_ontology():
 	return uris, graph
 
 if __name__ == "__main__":
-        name = 'pdb_aln'
 	MSA = Namespace("http://localhost/msaont#")
 	#uris,graph = build_empty_ontology() 
         graph = Graph()
 	graph.bind("rdf", RDF)
 	graph.bind("rdfs", RDFS)
 	graph.bind("msaont", MSA)
-	#ifile = 'totnrtxTK_with_consensus.cma'
-	#ifile = 'prokino-dedupe.cma'
-	#ifile = 'temp.cma'
-        #ifile = 'seqs-pressed-cons.cma'
+        
+        #parameterize I/O
         ifile = '150806_nrtx.unique_is119_is10.cma'
         outfile = 'msaont_nr.rdf'
+        name = 'pdb_aln'
 
+        #add aligned fasta support
 	all_aln = cma.read(ifile)
 	dedup_aln = clean_records(all_aln)
 	dedup_eqv = utils.get_equivalent_positions(dedup_aln)
+
 	#MSA instance
 	curi = URIRef(MSA[name])	
 	graph.add((curi, RDF.type, MSA.msa))
@@ -109,7 +109,7 @@ if __name__ == "__main__":
 	bar = Bar('Scanning sequences', max=len(dedup_aln['sequences']))
 
         #limited number of records for testing
-	for rec in dedup_aln['sequences'][1:6]:
+	for rec in dedup_aln['sequences']:
                 print rec['id']
                 #assume sequence uri already exists
                 tsplit = rec['id'].split('_')
