@@ -2,7 +2,8 @@ from rdflib.namespace import OWL, RDF, RDFS, XSD
 from rdflib import Graph, Literal, Namespace, URIRef
 from urllib import quote,unquote
 from progress.bar import Bar
-from biocma import utils,cma
+from biocma import cma, utils
+from Bio import SeqIO
 
 def clean_records(block):
     """Removes sequences with duplicate ids. """
@@ -21,164 +22,126 @@ def clean_records(block):
              'query_chars': block['query_chars'],
              'sequences': new_seqs}
 
-def build_empty_ontology():
-	#new namespace definition
-        MSA = Namespace("http://localhost/msaont#")
+def manipulate_fasta(ifile, p):
+    seqs = SeqIO.parse('temp.fasta','fasta')
+    slen = len(seqs.next().seq)
+    tempseq = cma.seqrecord2sequence(seqs.next(),0,1)
+    tempseq['id'] = 'filler'
+    temp = [[] for x in range(slen)]
+    seqs = SeqIO.parse('temp.fasta','fasta')
+    for seq in seqs:
+        for j in range(len(seq.seq)):
+            temp[j].append(seq.seq[j])
+    caps = []
+    tseq = ''
+    for x in temp:
+        if float(x.count('-'))/len(x) > p:
+            caps.append('l')
+        else:
+            caps.append('u')
+            tseq += 'A'
+    tempseq['seq'] = tseq
+    new_seqs,i = [tempseq],0
+    seqs = SeqIO.parse('temp.fasta','fasta')
+    for seq in seqs:
+        i += 1
+        nseq = ''
+        cmaseq = cma.seqrecord2sequence(seq,0,i)
+        for ind in range(len(cmaseq['seq'])):
+            if caps[ind] == 'l': 
+                if cmaseq['seq'][ind] != '-':
+                    nseq += cmaseq['seq'][ind].lower()
+            else:
+                nseq += cmaseq['seq'][ind].upper()
+        cmaseq['seq'] = nseq
+        cmaseq['head_len'] = 0
+        new_seqs.append(cmaseq)
+    return {'level':0,
+             'one': 1,
+             'name': ifile,
+             'params': '',
+             'query_length': caps.count('u'),
+             'query_chars': ''.join(['*' for x in range(caps.count('u'))]),
+             'sequences': new_seqs}
+    
+def populate(sequences, name, outfile, namespace):
+    MSA = Namespace(namespace)
+    graph = Graph()
+    graph.bind("rdf", RDF)
+    graph.bind("rdfs", RDFS)
+    graph.bind("msaont", MSA)
+    
+    #add aligned fasta support
+    #all_aln = cma.read(ifile)
+    dedup_aln = clean_records(sequences)
+    dedup_eqv = utils.get_equivalent_positions(dedup_aln)
 
-	#instantiate empty graph
-	graph = Graph()
-	uris = {}
+    #MSA instance
+    curi = URIRef(MSA[name])	
+    graph.add((curi, RDF.type, MSA.msa))
+    graph.add((curi, MSA.id, Literal(name)))
 
-	#namespace binding
-	graph.bind("rdf", RDF)
-	graph.bind("rdfs", RDFS)
-	graph.bind("msaont", MSA)
-	
-	#MSA class
-	msa = URIRef(MSA["msa"])
-	uris['msa'] = msa
-	graph.add((msa, RDF.type, RDFS.Class))
-	graph.add((msa, MSA.id, Literal("Unique identifier for MSA.")))
-	
-	#Sequence class
-	seq = URIRef(MSA["sequence"])
-	uris['sequence'] = seq
-	graph.add((seq, RDF.type, RDFS.Class))
-	graph.add((seq, MSA.id, Literal("Unique identifier for Sequence.")))
+    bar = Bar('Scanning sequences', max=len(dedup_aln['sequences']))
 
-	#Segment class
-	segment = URIRef(MSA["segment"])
-	uris['segment'] = segment
-	graph.add((segment, RDF.type, RDFS.Class))
-
-	#subclasses
-	ar = URIRef(MSA["aligned_residue"])
-	uris['aligned_residue'] = ar
-	graph.add((ar, RDFS.subClassOf, segment))
-	graph.add((ar, MSA.aln_pos, Literal("Position of residue in profile.")))
-	graph.add((ar, MSA.native_pos, Literal("Position of residue in native sequence.")))
-	graph.add((ar, MSA.native_residue, Literal("Residue type in native sequence.")))
-
-	insert = URIRef(MSA["insertion"])
-	uris['insertion'] = insert
-	graph.add((insert, RDFS.subClassOf, segment))
-	graph.add((insert, MSA.insert_after_aln_pos, Literal("Insertion occurs after this position in the profile.")))
-	graph.add((insert, MSA.native_pos, Literal("Positions (start, end) of insertion in native sequence.")))
-	graph.add((insert, MSA.native_residues, Literal("Residues inserted.")))
-
-	delete = URIRef(MSA["deletion"])
-	uris['deletion'] = delete
-	graph.add((delete, RDFS.subClassOf, segment))
-	graph.add((delete, MSA.deleted_aln_pos, Literal("Profile position not represented in sequence.")))
-
-	#has_sequence
-	graph.add((MSA.has_sequence, RDF.type, RDF.Property))
-	graph.add((MSA.has_sequence, RDFS.domain, msa))
-	graph.add((MSA.has_sequence, RDFS.range, seq))
-	
-	#has_segment
-	graph.add((MSA.has_segment, RDF.type, RDF.Property))
-	graph.add((MSA.has_segment, RDFS.domain, seq))
-	graph.add((MSA.has_segment, RDFS.range, segment))	
-	
-	return uris, graph
+    for rec in dedup_aln['sequences'][1:]:
+        #assume sequence uri already exists
+        tsplit = rec['id'].split('_')
+        sequri = MSA['_'.join(tsplit[1:])]
+        seq = ''.join((c for c in rec['seq'] if not c.islower()))
+        og_seq = rec['seq']
+        acc = quote(rec['id'])
+        #sequence instance
+        sequri = URIRef(MSA[acc])
+        graph.add((sequri, RDF.type, MSA.sequence))
+        graph.add((sequri, MSA.id, Literal(acc)))
+        for i,r in enumerate(seq,start=1):
+            ruri = URIRef(MSA[acc+str(i)])
+            graph.add((sequri, MSA.has_segment, ruri))
+            if og_seq[0] == r:
+                og_seq = og_seq[1:]
+            else:
+                j = 0
+                while og_seq[j] != r:
+                    j += 1
+                insert = og_seq[:j]
+                og_seq = og_seq[j+1:]
+                rurii = MSA[acc+'_i_'+str(i)]
+                graph.add((rurii, RDF.type, MSA.Insertion))
+                graph.add((rurii, MSA.hasAlignedPosition, Literal(i)))
+                graph.add((rurii, MSA.hasNativeResidue, Literal(insert.upper())))
+                graph.add((rurii, MSA.hasLength, Literal(len(insert))))
+                if rec['id'] in dedup_eqv[i]:
+                    graph.add((rurii, MSA.hasNativePosition, Literal(dedup_eqv[i][rec['id']]+1)))
+            if r == '-':
+                #add deletion node
+                graph.add((ruri, RDF.type, MSA.deletion))
+                graph.add((ruri, MSA.deleted_aln_pos, Literal(i)))
+            else:
+                graph.add((ruri, RDF.type, MSA.aligned_residue))
+                graph.add((ruri, MSA.aln_pos, Literal(i)))
+                if unquote(acc) in dedup_eqv[i]:
+                    graph.add((ruri, MSA.native_pos, Literal(dedup_eqv[i][unquote(acc)])))
+                else:
+                    print "shouldn't happen" #deletions taken care of above
+                graph.add((ruri, MSA.native_residue, Literal(r)))
+        bar.next()
+    bar.finish()	
+    graph.serialize(destination=outfile, format='pretty-xml')
+    return
 
 if __name__ == "__main__":
-	MSA = Namespace("http://localhost/msaont#")
-	#uris,graph = build_empty_ontology() 
-        graph = Graph()
-	graph.bind("rdf", RDF)
-	graph.bind("rdfs", RDFS)
-	graph.bind("msaont", MSA)
-        
-        #parameterize I/O
-        ifile = '150806_nrtx.unique_is119_is10.cma'
-        outfile = 'msaont_nr.rdf'
-        name = 'pdb_aln'
+    import argparse
 
-        #add aligned fasta support
-	all_aln = cma.read(ifile)
-	dedup_aln = clean_records(all_aln)
-	dedup_eqv = utils.get_equivalent_positions(dedup_aln)
-
-	#MSA instance
-	curi = URIRef(MSA[name])	
-	graph.add((curi, RDF.type, MSA.msa))
-	graph.add((curi, MSA.id, Literal(name)))
-
-	bar = Bar('Scanning sequences', max=len(dedup_aln['sequences']))
-
-        #limited number of records for testing
-	for rec in dedup_aln['sequences']:
-                print rec['id']
-                #assume sequence uri already exists
-                tsplit = rec['id'].split('_')
-                sequri = MSA['_'.join(tsplit[1:])]
-		seq = ''.join((c for c in rec['seq'] if not c.islower()))
-                og_seq = rec['seq']
-		acc = quote(rec['id'])
-		#sequence instance
-		sequri = URIRef(MSA[acc])
-		graph.add((sequri, RDF.type, MSA.sequence))
-		graph.add((sequri, MSA.id, Literal(acc)))
-		for i,r in enumerate(seq,start=1):
-			ruri = URIRef(MSA[acc+str(i)])
-			graph.add((sequri, MSA.has_segment, ruri))
-                        if og_seq[0] == r:
-                            og_seq = og_seq[1:]
-                        else:
-                            j = 0
-                            while og_seq[j] != r:
-                                j += 1
-                            insert = og_seq[:j]
-                            og_seq = og_seq[j+1:]
-                            rurii = MSA[acc+'_i_'+str(i)]
-                            graph.add((rurii, RDF.type, MSA.Insertion))
-                            graph.add((rurii, MSA.hasAlignedPosition, Literal(i)))
-                            graph.add((rurii, MSA.hasNativeResidue, Literal(insert.upper())))
-                            graph.add((rurii, MSA.hasLength, Literal(len(insert))))
-                            if rec['id'] in dedup_eqv[i]:
-                                graph.add((rurii, MSA.hasNativePosition, Literal(dedup_eqv[i][rec['id']]+1)))
-			if r == '-':
-				#add deletion node
-				graph.add((ruri, RDF.type, MSA.deletion))
-				graph.add((ruri, MSA.deleted_aln_pos, Literal(i)))
-			else:
-				graph.add((ruri, RDF.type, MSA.aligned_residue))
-				graph.add((ruri, MSA.aln_pos, Literal(i)))
-				if unquote(acc) in dedup_eqv[i]:
-					graph.add((ruri, MSA.native_pos, Literal(dedup_eqv[i][unquote(acc)])))
-				else:
-					print "shouldn't happen" #deletions taken care of above
-					#graph.add((ruri, MSA.native_pos, Literal(dedup_eqv[i+1][acc])))
-				graph.add((ruri, MSA.native_residue, Literal(r)))
-			#need to implement insertions
-		bar.next()
-						
-	bar.finish()	
-
-	quer = '''SELECT 
-			?seq ?res ?pos
-			WHERE { 
-				?seq rdf:type msaont:sequence; 
-					msaont:has_segment ?seg . 
-				?seg rdf:type msaont:aligned_residue; 
-					msaont:aln_pos ?pos; 
-					msaont:native_residue ?res . 
-				filter(?res = 'R')
-				filter(?pos = 59)
-			}'''
-
-	quer2 = '''SELECT 
-				?pos ?res (Count(*) as ?Count)
-				WHERE {
-					?seg rdf:type msaont:aligned_residue;
-						msaont:aln_pos ?pos;
-						msaont:native_residue ?res .
-				}
-				GROUP BY ?pos ?res'''
-
-        graph.serialize(destination=outfile, format='pretty-xml')
-	qres = graph.query(quer)
-
-
+    parser = argparse.ArgumentParser(description = 'Populate the Multiple Sequence Alignment Ontology')
+    parser.add_argument('infile', metavar='infile', type=str, help='input aligned sequences')
+    parser.add_argument('name', metavar='name', type=str, help='Graph name')
+    parser.add_argument('--namespace', metavar='namespace', type=str, default='http://localhost/msaont#', help='Graph namespace')
+    parser.add_argument('-p', dest='prop', action='store', default=0.25, help='proportion of inserts allowed')
+    parser.add_argument('-o', dest='outfile', action='store', default='out.rdf', help='outfile')
+    args = parser.parse_args()
+    ext = args.infile.split('.')[-1]
+    if ext != 'cma':
+        seqs = manipulate_fasta(args.infile, args.prop)
+    else:
+        seqs = cma.read(args.infile)
+    populate(seqs, args.name, args.outfile, args.namespace)
