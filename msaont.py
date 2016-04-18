@@ -136,7 +136,7 @@ if __name__ == "__main__":
     parser.add_argument('infile', metavar='infile', type=str, help='input aligned sequences')
     parser.add_argument('name', metavar='name', type=str, help='Graph name')
     parser.add_argument('--namespace', metavar='namespace', type=str, default='http://localhost/msaont#', help='Graph namespace')
-    parser.add_argument('-p', dest='prop', action='store', default=0.25, help='proportion of inserts allowed')
+    parser.add_argument('-p', dest='prop', action='store', default=0.25, help='proportion of inserts allowed in an aligned residue')
     parser.add_argument('-o', dest='outfile', action='store', default='out.rdf', help='outfile')
     args = parser.parse_args()
     ext = args.infile.split('.')[-1]
