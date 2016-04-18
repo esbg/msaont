@@ -10,10 +10,10 @@ License: MIT
 #Python dependencies
 ------
 Please ensure the following Python packages are installed via ``pip``:
-- `Biopython <http://biopython.org/wiki/Main_Page>`_
-- `RDFLib <https://github.com/RDFLib/rdflib>`_
-- `progress <https://pypi.python.org/pypi/progress>`_
-- `biocma <https://github.com/etal/biocma>`_
+- `Biopython <http://biopython.org/wiki/Main_Page>`
+- `RDFLib <https://github.com/RDFLib/rdflib>`
+- `progress <https://pypi.python.org/pypi/progress>`
+- `biocma <https://github.com/etal/biocma>`
 
 #Note
 ------
