@@ -17,6 +17,6 @@ Please ensure the following Python packages are installed via ``pip``:
 
 #Note
 ------
-If you are populating MSAOnt with a cma file, the first sequence must be an 
-aligned consensus (with no deletions).
+If you are populating MSAOnt with a cma file, the first entry must be an 
+aligned gapless consensus sequence.
 
