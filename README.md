@@ -1,3 +1,4 @@
+[![DOI](https://zenodo.org/badge/21813/esbg/msaont.svg)](https://zenodo.org/badge/latestdoi/21813/esbg/msaont)
 #MSAOnt Population Software
 ------
 This software generates an instance of the multiple sequence alignment ontology
